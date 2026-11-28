@@ -42,6 +42,8 @@ All notable changes to RoamEtch are documented here. The format follows
 - Sanitized Node relay and Worker payloads, rejected mismatched location/telemetry
   targets, normalized TG heading to the Bot API range, and prevented provider errors
   from exposing notification credentials.
+- Removed empty conditional Webhook fields from the rendered DOM so TG forms no
+  longer display stray null text.
 
 ## [3.13.0] - 2026-11-28
 

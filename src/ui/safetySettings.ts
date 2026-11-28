@@ -212,7 +212,7 @@ export function createSafetySettingsCard() {
         draft.webhooks = draft.webhooks.filter((item) => item.id !== webhook.id);
         renderWebhooks();
       };
-      content.append(
+      content.append(...[
         el('div', { class: 'setting-row' }, el('div', { class: 'txt' }, el('div', { class: 't' }, t('safety.webhookEnabled'))), el('label', { class: 'switch' }, active, el('span', { class: 'slider' }))),
         field(t('safety.webhookPlatform'), '', platform),
         field(t('safety.webhookName'), '', name),
@@ -227,7 +227,7 @@ export function createSafetySettingsCard() {
         webhook.platform === 'custom' ? field(t('safety.customTemplate'), t('safety.customTemplateHint'), template) : null,
         el('div', { class: 'row wrap', style: { marginTop: '8px' } }, test, remove),
         status
-      );
+      ].filter((node) => node !== null));
       item.append(content);
       webhookList.append(item);
     }

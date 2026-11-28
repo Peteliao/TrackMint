@@ -168,6 +168,7 @@ test('TG settings send a native location and reply with escaped telemetry throug
   const webhook = card.locator('.safety-webhook');
   await expect(webhook.locator(':scope > summary')).toContainText('TG');
   await webhook.locator(':scope > summary').click();
+  await expect(webhook.locator('.safety-webhook-fields')).not.toContainText('null');
   await expect(webhook.getByLabel('TG Bot Token', { exact: true })).toHaveAttribute('type', 'password');
   await expect(webhook.getByLabel('TG Chat ID', { exact: true })).toHaveValue('-1001234567890');
   await expect(webhook.getByLabel('TG 话题 ID', { exact: true })).toHaveValue('42');
