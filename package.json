@@ -1,7 +1,7 @@
 {
   "name": "roametch",
   "private": true,
-  "version": "3.13.0",
+  "version": "3.14.0",
   "type": "module",
   "license": "GPL-3.0-only",
   "description": "Pure-frontend trip recorder & analyzer with dual-region (CN/Global) adaptive service routing",

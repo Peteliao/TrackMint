@@ -3,7 +3,7 @@ import './styles/main.css';
 import './styles/story.css';
 import '@fontsource/barlow-condensed/600.css';
 import '@fontsource/barlow-condensed/700.css';
-import { initI18n, t } from './core/i18n';
+import { initI18n, t, currentLang } from './core/i18n';
 import { initRegion, regionState } from './core/region';
 import * as themeCore from './core/theme';
 import { on as busOn } from './core/events';
@@ -17,6 +17,10 @@ import * as simulationCore from './core/simulation';
 import * as rewalkCore from './core/rewalk';
 import * as batchCore from './core/batch';
 import * as backupCore from './core/backup';
+import * as safetyCore from './core/safety';
+import * as notifierCore from './core/notifier';
+import { startSafetyMonitor } from './core/safetyMonitor';
+import { handleSafetyMonitorResult, safetyPositionFromRecorder } from './ui/safety';
 import * as coordsCore from './core/coords';
 import * as keepaliveCore from './core/keepalive';
 import { parseShareFragment, shareFragmentFingerprint } from './core/shareLink';
@@ -246,10 +250,18 @@ async function boot() {
   weatherCore.initWeatherMonitor();
 
   const shell = createShell(document.getElementById('app'));
+  startSafetyMonitor({
+    getSnapshot: () => ({
+      position: safetyPositionFromRecorder(),
+      recording: recorderCore.rec.status === 'recording'
+    }),
+    getLanguage: currentLang,
+    onResult: handleSafetyMonitorResult
+  });
   document.getElementById('boot-splash')?.remove();
   diag('boot', 'app ready', { lang: navigator.language });
   // debug handle for diagnostics & acceptance testing (spec: debuggability)
-  window.__lt = { recorder: recorderCore, weather: weatherCore, simulation: simulationCore, store: storeCore, migration: migrationCore, databaseCheckpoint: databaseCheckpointCore, coords: coordsCore, region: regionState, shell, theme: themeCore, rewalk: rewalkCore, batch: batchCore, backup: backupCore, keepalive: keepaliveCore, meet: meetCore.meet, meetCore, meetLink: meetLinkCore, updates: { show: showUpdateNotice } };
+  window.__lt = { recorder: recorderCore, weather: weatherCore, simulation: simulationCore, store: storeCore, migration: migrationCore, databaseCheckpoint: databaseCheckpointCore, coords: coordsCore, region: regionState, shell, theme: themeCore, rewalk: rewalkCore, batch: batchCore, backup: backupCore, keepalive: keepaliveCore, meet: meetCore.meet, meetCore, meetLink: meetLinkCore, safety: safetyCore, notifier: notifierCore, updates: { show: showUpdateNotice } };
 
   // Live fragment imports. A meet invite takes precedence when both coexist.
   const hasMeetFragment = /[#&]meet=/.test(location.hash);

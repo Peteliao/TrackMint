@@ -4,6 +4,45 @@ All notable changes to RoamEtch are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions use
 [Semantic Versioning](https://semver.org/).
 
+## [3.14.0] - 2026-11-28
+
+### Added
+
+- Added Safety & Check-in with explicit bilingual disclosure, manual check-ins and
+  SOS from the recording map, keyboard activation, and an OLED pocket-lock SOS action.
+- Added local-only safety contacts and credentials, email/SMS fallbacks, enterprise
+  webhooks, ntfy, Bark, custom JSON webhooks, optional relay SMTP, scheduled check-ins,
+  and one low-battery report per charging cycle.
+- Added TG delivery through the direct Bot API, a custom HTTPS API root, the Node
+  relay, or the Cloudflare Worker, including chat/topic targeting and native WGS-84
+  locations with accuracy, heading, and localized navigation buttons.
+- TG telemetry follows the location as an HTML reply with sender, time, coordinates,
+  accuracy, altitude, distance, duration, battery, activity, and report status.
+
+### Changed
+
+- Kept safety credentials in independent local storage, outside trip exports, sharing,
+  synchronization, and reset-preserved trip data. Settings reset now clears safety
+  credentials and contacts without deleting trips, waypoints, or photos.
+- Expanded safety setup and delivery-limit guidance across Simplified Chinese,
+  Traditional Chinese, English, Japanese, Korean, and Spanish.
+- Compacted promotional-preview actions while preserving save/share availability
+  detection and the three-action fallback on unsupported browsers.
+- Updated the optional Node relay to Node.js 20+ and patched Nodemailer 10.6.1,
+  with clean frontend and relay dependency audits.
+
+### Fixed
+
+- Included direct TG channels in automatic scheduled and low-battery reporting.
+- Kept the Safety action clickable in the expanded recording panel, enforced HTTPS
+  notification transport in the client and both relays, and stopped skipped mail drafts
+  from turning successful automatic delivery into a failure.
+- Persisted attempted low-battery reports across reloads so each charging cycle sends
+  at most one low-battery report.
+- Sanitized Node relay and Worker payloads, rejected mismatched location/telemetry
+  targets, normalized TG heading to the Bot API range, and prevented provider errors
+  from exposing notification credentials.
+
 ## [3.13.0] - 2026-11-28
 
 ### Added

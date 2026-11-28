@@ -29,6 +29,8 @@ import { openWaypointModal, moveWaypoint, moveVertex, insertVertex, deleteVertex
 import { el, icon, toast, modal, hasOpenOverlay } from './helpers';
 import { openCamera } from './camera';
 import { backFromUIState, currentUIState, pushUIState, pushOverlayState, removeOverlayState } from './history';
+import { loadSafetySettings } from '../core/safety';
+import { openSafetyCheckIn, sendSafetyNow } from './safety';
 
 export function createRecordView(navigate: (name: 'analysis' | 'export' | 'settings', intent?: any) => void | Promise<void> = () => {}) {
   const view = el('div', { class: 'view', id: 'view-record' });
@@ -186,6 +188,49 @@ export function createRecordView(navigate: (name: 'analysis' | 'export' | 'setti
     'aria-pressed': 'false', disabled: true, onclick: toggleEdit
   }, icon('edit'));
   tools.append(followBtn, fitBtn, undoBtn, redoBtn);
+  const safetyEntry = el('button', {
+    type: 'button', class: 'safety-entry iconbtn',
+    title: `${t('record.safetyCheckIn')} · ${t('record.safetySosHold')}`,
+    'aria-label': t('record.safetyCheckIn'),
+    onclick: (event) => {
+      event.stopPropagation();
+      openSafetyCheckIn('checkin');
+    }
+  }, icon('shield', 18));
+  let safetyHoldTimer = 0;
+  let safetyLongPress = false;
+  let safetyPointer: number | null = null;
+  const clearSafetyHold = () => {
+    clearTimeout(safetyHoldTimer);
+    safetyHoldTimer = 0;
+    safetyPointer = null;
+    safetyEntry.classList.remove('holding');
+  };
+  safetyEntry.addEventListener('pointerdown', (event) => {
+    if (safetyPointer != null) return;
+    safetyPointer = event.pointerId;
+    safetyLongPress = false;
+    safetyEntry.classList.add('holding');
+    try { safetyEntry.setPointerCapture(event.pointerId); } catch { /* pointer already gone */ }
+    safetyHoldTimer = window.setTimeout(() => {
+      safetyLongPress = true;
+      safetyHoldTimer = 0;
+      try { safetyEntry.setPointerCapture(event.pointerId); } catch { /* pointer already gone */ }
+      void sendSafetyNow('sos');
+    }, 2000);
+  });
+  safetyEntry.addEventListener('pointerup', clearSafetyHold);
+  safetyEntry.addEventListener('pointercancel', clearSafetyHold);
+  safetyEntry.addEventListener('pointerleave', clearSafetyHold);
+  safetyEntry.addEventListener('click', (event) => {
+    if (safetyLongPress) {
+      safetyLongPress = false;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }, true);
+  safetyEntry.addEventListener('blur', clearSafetyHold);
+  safetyEntry.addEventListener('contextmenu', (event) => event.preventDefault());
   on('map:followoff', () => followBtn.classList.remove('active'));
   on('history:changed', syncEditTools);
 
@@ -263,7 +308,7 @@ export function createRecordView(navigate: (name: 'analysis' | 'export' | 'setti
   tools.insertBefore(powerLockEntry, undoBtn);
   tools.insertBefore(editBtn, undoBtn);
   const pHead = el('div', { class: 'lp-head', onclick: togglePanel },
-    pStatus, pSave, el('span', { class: 'rec-dot', id: 'panel-rec-dot' }), el('span', { class: 'chev' }, icon('chevron', 16)));
+    pStatus, pSave, el('span', { class: 'rec-dot', id: 'panel-rec-dot' }), safetyEntry, el('span', { class: 'chev' }, icon('chevron', 16)));
   function togglePanel() {
     panel.classList.toggle('collapsed');
     set('panelCollapsed', panel.classList.contains('collapsed'));
@@ -1575,18 +1620,41 @@ export function createRecordView(navigate: (name: 'analysis' | 'export' | 'setti
   const oledSignal = createSignal(odSig.num.parentElement);
   psBottom.innerHTML = `
     <div class="ps-actions">
-      <div class="ps-act">
-        <button type="button" class="ps-ring ps-unlock" aria-label="${t('record.lockHint')}">
-          <svg width="104" height="104" viewBox="0 0 104 104" aria-hidden="true">
-            <circle class="bgc" cx="52" cy="52" r="46" fill="none" stroke-width="6"/>
-            <circle class="fgc" cx="52" cy="52" r="46" fill="none" stroke-width="6" stroke-linecap="round"/>
-          </svg>
-          <span class="ps-lock"><svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M8 11V7a4 4 0 0 1 8 0v4" stroke="currentColor" stroke-width="2" fill="none"/></svg></span>
-        </button>
-        <div class="ps-hint">${t('record.lockHint')}</div>
+      <div class="ps-primary-actions">
+        <div class="ps-act">
+          <button type="button" class="ps-ring ps-unlock" aria-label="${t('record.lockHint')}">
+            <svg width="104" height="104" viewBox="0 0 104 104" aria-hidden="true">
+              <circle class="bgc" cx="52" cy="52" r="46" fill="none" stroke-width="6"/>
+              <circle class="fgc" cx="52" cy="52" r="46" fill="none" stroke-width="6" stroke-linecap="round"/>
+            </svg>
+            <span class="ps-lock"><svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M8 11V7a4 4 0 0 1 8 0v4" stroke="currentColor" stroke-width="2" fill="none"/></svg></span>
+          </button>
+          <div class="ps-hint">${t('record.lockHint')}</div>
+        </div>
       </div>
     </div>
     <div class="ps-sub">${t('record.lockSub')}</div>`;
+  const psSosAct = el('div', { class: 'ps-act ps-sos-act' });
+  const psSosRing = el('button', {
+    type: 'button', class: 'ps-ring ps-sos', 'data-oled-action': 'sos',
+    'aria-label': t('record.safetySosHold'), title: t('record.safetySosHold'), disabled: true
+  },
+  el('span', {
+    html: '<svg width="104" height="104" viewBox="0 0 104 104" aria-hidden="true"><circle class="bgc" cx="52" cy="52" r="46" fill="none" stroke-width="6"/><circle class="fgc" cx="52" cy="52" r="46" fill="none" stroke-width="6" stroke-linecap="round"/></svg>'
+  }),
+  el('span', { class: 'ps-lock' }, icon('shield', 26)));
+  psSosAct.append(psSosRing, el('div', { class: 'ps-hint' }, t('record.safetySosHold')));
+  const psSosFg = psSosRing.querySelector('.fgc') as SVGCircleElement;
+  psBottom.querySelector('.ps-primary-actions').append(psSosAct);
+  function updatePsSafety() {
+    const available = loadSafetySettings().enabled;
+    const primary = psBottom.querySelector('.ps-primary-actions')!;
+    if (available && !psSosAct.isConnected) primary.append(psSosAct);
+    if (!available) psSosAct.remove();
+    psSosRing.disabled = !available;
+  }
+  on('safety:settings-changed', updatePsSafety);
+  updatePsSafety();
   const psCamAct = el('div', { class: 'ps-act ps-cam-act', hidden: true });
   psCamAct.innerHTML = `
     <div class="ps-cam-track" role="button" aria-label="${t('record.camSwipe')}" title="${t('record.camSwipeHint')}">
@@ -1697,6 +1765,10 @@ export function createRecordView(navigate: (name: 'analysis' | 'export' | 'setti
   bindHold(unlockRing, unlockFg, 1500, unlockPowerLock);
   unlockRing.addEventListener('click', (e) => {
     if (e.detail === 0) unlockPowerLock();
+  });
+  bindHold(psSosRing, psSosFg, 2000, () => { void sendSafetyNow('sos'); });
+  psSosRing.addEventListener('click', (e) => {
+    if (e.detail === 0) openSafetyCheckIn('sos');
   });
   ps.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -1811,6 +1883,7 @@ export function createRecordView(navigate: (name: 'analysis' | 'export' | 'setti
         applyOledBrightness();
         renderPsTop();
         updatePsCamera();
+        updatePsSafety();
         if (rec.live?.lat != null && rec.live?.lon != null) {
           updateWeatherLocation(rec.live.lat, rec.live.lon, { force: true, probe: !weatherState.ranking });
         } else if (weatherState.location) {

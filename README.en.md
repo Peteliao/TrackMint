@@ -40,6 +40,9 @@ Open it in any modern mobile browser. On iPhone and iPad, use Safari and choose 
     <td align="center"><img src="docs/screenshots/en/settings.png" width="280" alt="Settings with English and Chinese UI, metric and imperial units, and OLED-friendly themes"><br><sub><b>Personalisation</b> · bilingual UI, units, OLED-friendly themes</sub></td>
     <td align="center"><img src="docs/screenshots/en/install.png" width="280" alt="Install guide showing how to add the web app to the iPhone home screen"><br><sub><b>Home-screen install</b> · step-by-step on iOS, Android, desktop</sub></td>
   </tr>
+  <tr>
+    <td align="center" colspan="2"><img src="docs/screenshots/en/safety.png" width="280" alt="Safety settings with local contacts, privacy guidance, and notification options"><br><sub><b>Safety &amp; Check-in</b> · local credentials, emergency contacts, and notification options</sub></td>
+  </tr>
 </table>
 
 ## Why RoamEtch
@@ -125,6 +128,18 @@ Open it in any modern mobile browser. On iPhone and iPad, use Safari and choose 
 - The invite, room, and chat exist only in the link `#` fragment and local memory; no cloud room is stored. Useful for hiking groups, convoys, camping, and crowded venues.
 
 > Live meetup needs a network connection and browser location. Mobile operating systems may pause GPS when the screen is locked or the app is backgrounded. It is not an SOS or professional rescue tool. A frontend-only app cannot force a hostile client offline or erase positions already received by another device. A removed teammate stops receiving new room-key generations, but the invite remains a copyable bearer capability; if they still hold the full invite and rejoin under a new identity, clients cannot distinguish them. When P2P originals are enabled, both devices can see each other’s network IP addresses during ICE negotiation and transfer; STUN/TURN servers also receive the relevant connection metadata. Original bytes bypass the meetup relay, but a configured TURN server may carry the still-encrypted DataChannel traffic.
+
+### Safety & Check-in: report that you are safe or ask for help
+
+- Opt in after reading the bilingual risk disclosure in **Settings → Safety & Check-in**. Your sender alias, emergency contacts, webhook secrets, and TG credentials live only in independent local storage, outside trip sharing, GPX/KML/HTML exports, cross-device sync, and trip backups.
+- Tap the map’s safety button for a check-in confirmation or hold it for 2 seconds to send SOS. When safety is enabled, OLED pocket lock also offers a dedicated SOS action. Keyboard activation is available, and manual sends have a 10-second cooldown.
+- Reports use the original WGS-84 position with accuracy, altitude, distance, duration, battery, and activity state. Safety reports deliberately bypass global start/end privacy-circle trimming. AMap navigation links convert to GCJ-02 only for that navigation target; stored coordinates remain unchanged.
+- Emergency email can use the system `mailto:` handler or self-hosted relay SMTP. The optional emergency phone stays local and only opens `sms:` offline; it is never uploaded to a server. Enterprise WeCom, Feishu, DingTalk, ntfy, Bark, and custom JSON webhooks are supported, with copy/text fallbacks when delivery fails. Webhook and relay URLs must use HTTPS.
+- TG accepts a Bot Token, numeric or `@username` Chat ID, optional forum Topic ID, optional native location, and direct/custom-HTTPS/Node-relay/Cloudflare-Worker delivery. With native location enabled, it sends a WGS-84 location with AMap/Google/Apple navigation buttons, then replies with the complete HTML telemetry report.
+- Automatic check-ins run every 15, 30, or 60 minutes while the page is visible, a recording is active, and the position is no more than 5 minutes old; automatic sends remain at least 15 minutes apart. On supported browsers, a configurable low-battery threshold sends one report per charging cycle. Hidden pages, OS suspension, unavailable APIs, and outages can prevent delivery.
+- Before using TG, send `/start` to the bot. Private chats must permit bot messages; group chats require adding the bot and granting posting permission. Enter the target Chat ID and optional Topic ID, then run a test. Browser CORS/User-Agent restrictions, regional networks, API limits, inactive bots, outages, and revoked tokens can all fail delivery; use a supported self-hosted relay when direct access is restricted.
+
+> Safety notifications do not guarantee rescue or message delivery. Browser visibility, system sleep, battery policy, location failures, and provider outages can interrupt automatic reports. Test with trusted contacts first and use local emergency channels as well in an emergency.
 
 ### Cross-device sync: two devices, no cloud copy
 
@@ -217,7 +232,9 @@ docker build -t roametch-relay ./relay
 docker run --rm -p 8080:8080 roametch-relay
 ```
 
-Then choose **Settings → Team relay → Custom WS relay** and enter `wss://your-host/room/{room}`. The relay forwards ciphertext only and stores no messages.
+Then choose **Settings → Team relay → Custom WS relay** and enter `wss://your-host/room/{room}`. The meetup relay forwards ciphertext only and stores no messages.
+
+The same Node service can optionally enable stateless safety-notification forwarding and SMTP delivery for enterprise webhooks, TG, and email mode. It is off by default; when enabled, expose it over HTTPS with hostname/IP allowlists, an auth token, timeouts, and rate limits. Safety requests carry plaintext coordinates and notification credentials for delivery, but the service writes no coordinate or message logs. Setup steps, the Cloudflare Worker template, and the Node DNS-pinning limitation are documented in [`relay/README.md`](relay/README.md).
 
 ## Architecture
 
@@ -230,7 +247,9 @@ Then choose **Settings → Team relay → Custom WS relay** and enter `wss://you
 - Offline: [vite-plugin-pwa](https://vite-pwa-org.netlify.app/) (Workbox)
 - Meetup: v2 invite (random public room id + 256-bit secret) + protocol v3 + HKDF-SHA-256 + AES-256-GCM; ordinary packets use per-sender sequence replay protection, while RTC signaling uses sender/message-id dedupe, expiry, and per-sender rate limits. Pairwise ECDH P-256 channels rotate the room key when membership changes and carry per-teammate hidden locations. Positions, text, thumbnails, and signaling use concurrent public MQTT WSS nodes or a custom WebSocket blind relay; HD originals use on-demand WebRTC DataChannels.
 - Camera: `getUserMedia` + inline video + Canvas; chat thumbnails are weak-network compressed and only the latest 20 remain in memory, while local shots become photo waypoints linked to WGS-84 coordinates and can export a full-resolution original during the session
+- Safety: independent local notification settings, cooldowns, and automatic monitoring; direct provider calls or stateless Node-relay/Cloudflare-Worker forwarding; native TG location followed by an HTML telemetry reply, with GCJ-02 conversion limited to AMap navigation
 - Tests: Vitest covers coordinate conversion, track statistics, backup integrity and encryption, yearly footprints, GPS quality, GPX/KML/GeoJSON, share links and share styles, meetup crypto and publish cadence, protocol rejection and ECDH key rotation, per-teammate visibility, MQTT frame validation, QR decoding, chat-image compression/validation, RTC signaling, ICE configuration, caches, and the transfer state machine, plus photo matching, story day grouping, weather parsing and travel books, sync identity/protocol/engine/transport, repository contracts, and Worker task dispatch/cancellation. Playwright covers demo analysis, privacy cropping, posters, text-only HTML export, the encrypted backup round-trip, in-app photo bursts/save/undo/original download, multi-photo nodes, two-client encrypted text and image chat, camera and image QR join, public MQTT delivery, on-demand WebRTC originals/privacy refusal/room-reset races, and OLED anti-mistouch/auto-lock; CI runs typecheck, unit tests, E2E, offline regressions, the 20k-point memory baseline, and the production build
+- Safety tests: six-language disclosures, local credential isolation, cooldowns and automatic reports, low-battery deduplication, TG two-message/topic/coordinate/HTML escaping, offline fallbacks, and Node/Worker allowlists, payload sanitization, and safe errors
 - Self-hosting: multi-stage Dockerfile + nginx.conf; an optional minimal blind relay template lives in [`relay/`](relay/README.md)
 
 ```text
@@ -269,6 +288,7 @@ GPS / GPX / photos
 RoamEtch is designed to keep data on your device, but “local-first” does not mean every network request disappears. Here is the precise boundary:
 
 - **Stored locally**: trips, track points, waypoints, photo thumbnails, and settings live in IndexedDB/localStorage. There is no account system, business backend, or in-app analytics reporting.
+- **Safety notifications**: only an explicit opt-in followed by a manual or automatic trigger sends precise WGS-84 coordinates and telemetry to your configured email, webhook, TG destination, or relay, so safety reports bypass global privacy-circle trimming. Credentials and contacts remain in separate local storage and never enter trip exports, shares, sync, or trip backups. The optional Node relay forwards requests and sends SMTP mail in memory without persisting coordinate/message logs; the Cloudflare Worker is likewise stateless. Receiving providers still handle location, IP, and message data under their own policies, which RoamEtch cannot control.
 - **Share links**: trip data and meetup invites are placed only in the URL `#` fragment. Browsers do not send the fragment to servers; anyone who receives the link can read the data inside, so share only with people you trust.
 - **Live meetup**: positions, text, thumbnails, and RTC signaling are encrypted on-device. The default public MQTT relay or a custom relay sees only ciphertext and the random public room id. The room id (128 random bits) and the invite secret (256 random bits) are generated independently, so observing the topic reveals no key material. Leaking the invite does expose positions and chat. Old v1 invites are rejected rather than downgraded. A relay can observe ciphertext packet sizes and timing, so it can infer that a thumbnail or signal is being sent, but cannot see its contents.
 - **Photos and P2P originals**: EXIF location data is stripped before local storage. Chat thumbnails are redrawn/compressed in memory from the camera or album, never written to the device gallery or IndexedDB, and only the latest 20 remain in the session. HD originals are off by default and move only after an explicit request over a DTLS-encrypted WebRTC DataChannel, with SHA-256 and image validation. They bypass the meetup relay and remain in bounded memory caches, but both devices can observe each other’s network IP addresses; STUN/TURN servers receive connection metadata and a configured TURN server may relay encrypted bytes. Exported posters, videos, and HTML use the locally processed images only.

@@ -3,13 +3,17 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Minimal blind WebSocket relay for RoamEtch live meetups",
+  "engines": {
+    "node": ">=20"
+  },
+  "description": "Blind WebSocket relay and optional stateless safety notifications for RoamEtch",
   "license": "GPL-3.0-only",
   "scripts": {
     "start": "node server.mjs",
     "test": "node --test test.mjs"
   },
   "dependencies": {
+    "nodemailer": "^10.6.1",
     "ws": "^8.18.0"
   }
 }

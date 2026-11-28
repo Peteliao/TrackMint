@@ -47,7 +47,10 @@ const mocks = vi.hoisted(() => ({
   openCamera: vi.fn(),
   openWaypointModal: vi.fn(),
   modal: vi.fn(),
-  navigate: vi.fn()
+  navigate: vi.fn(),
+  safetySettings: { enabled: false },
+  openSafetyCheckIn: vi.fn(),
+  sendSafetyNow: vi.fn()
 }));
 
 vi.mock('../src/core/i18n', () => ({
@@ -116,6 +119,11 @@ vi.mock('../src/core/store', () => ({
   deletePhotoWaypoint: mocks.deletePhotoWaypoint
 }));
 vi.mock('../src/core/gapRepair', () => ({ findTrackGaps: mocks.findTrackGaps }));
+vi.mock('../src/core/safety', () => ({ loadSafetySettings: () => mocks.safetySettings }));
+vi.mock('../src/ui/safety', () => ({
+  openSafetyCheckIn: mocks.openSafetyCheckIn,
+  sendSafetyNow: mocks.sendSafetyNow
+}));
 vi.mock('../src/core/locks', () => ({ onBroadcast: () => vi.fn() }));
 vi.mock('../src/core/history', () => ({ clearHistory: vi.fn() }));
 vi.mock('../src/core/waypointMeta', () => ({ WP_ICONS: {} }));
@@ -252,6 +260,9 @@ beforeEach(() => {
     return { close: vi.fn(() => body.remove()) };
   });
   mocks.navigate.mockResolvedValue(undefined);
+  mocks.safetySettings.enabled = false;
+  mocks.openSafetyCheckIn.mockReset();
+  mocks.sendSafetyNow.mockReset().mockResolvedValue(undefined);
   mocks.stopRecording.mockImplementation(async () => {
     mocks.rec.status = 'finished';
     mocks.rec.tripId = null;
@@ -406,6 +417,56 @@ describe('record view bounded loading', () => {
     );
   });
 
+  it('opens a check-in confirmation from the map safety button without changing recording state', async () => {
+    const view = await mount();
+    await waitForIdleInit();
+    (view.view.querySelector('.safety-entry') as HTMLButtonElement).click();
+    expect(mocks.openSafetyCheckIn).toHaveBeenCalledWith('checkin');
+    expect(mocks.rec.status).toBe('idle');
+  });
+
+  it('sends SOS after a two-second hold and swallows the following click', async () => {
+    const view = await mount();
+    await waitForIdleInit();
+    const entry = view.view.querySelector('.safety-entry') as HTMLButtonElement;
+    vi.useFakeTimers();
+    try {
+      const down = new MouseEvent('pointerdown', { bubbles: true });
+      Object.defineProperty(down, 'pointerId', { value: 7 });
+      entry.dispatchEvent(down);
+      expect(entry.classList.contains('holding')).toBe(true);
+      vi.advanceTimersByTime(1999);
+      expect(mocks.sendSafetyNow).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(mocks.sendSafetyNow).toHaveBeenCalledWith('sos');
+      entry.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }));
+      entry.click();
+      expect(mocks.openSafetyCheckIn).not.toHaveBeenCalled();
+      expect(entry.classList.contains('holding')).toBe(false);
+      expect(mocks.rec.status).toBe('idle');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels a short or cancelled safety hold', async () => {
+    const view = await mount();
+    await waitForIdleInit();
+    const entry = view.view.querySelector('.safety-entry') as HTMLButtonElement;
+    vi.useFakeTimers();
+    try {
+      const down = new MouseEvent('pointerdown', { bubbles: true });
+      Object.defineProperty(down, 'pointerId', { value: 8 });
+      entry.dispatchEvent(down);
+      vi.advanceTimersByTime(1000);
+      entry.dispatchEvent(new MouseEvent('pointercancel', { bubbles: true }));
+      vi.advanceTimersByTime(2000);
+      expect(mocks.sendSafetyNow).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   describe('OLED pocket lock', () => {
     async function enterFromIdle() {
       const view = await mount();
@@ -445,6 +506,22 @@ describe('record view bounded loading', () => {
       expect(mocks.setThemeColorOverride).toHaveBeenLastCalledWith(null);
       expect(mocks.setThemeModeOverride).toHaveBeenLastCalledWith(null);
       expect(mocks.releaseWakeLock).toHaveBeenCalledTimes(1);
+    });
+
+    it('adds the SOS action only after safety is enabled and keeps keyboard confirmation available', async () => {
+      const { view } = await enterFromIdle();
+      expect(document.querySelectorAll('#oled-dash button')).toHaveLength(1);
+      expect(document.querySelectorAll('[data-oled-action]')).toHaveLength(0);
+
+      mocks.safetySettings.enabled = true;
+      emitRecorder('safety:settings-changed', mocks.safetySettings);
+      expect(document.querySelectorAll('#oled-dash button')).toHaveLength(2);
+      const sos = document.querySelector('[data-oled-action="sos"]') as HTMLButtonElement;
+      expect(sos.disabled).toBe(false);
+      sos.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
+      expect(mocks.openSafetyCheckIn).toHaveBeenCalledWith('sos');
+      expect(view.isPowerLockActive()).toBe(true);
+      expect(mocks.rec.status).toBe('idle');
     });
 
     it('keeps the entry disabled in the finished state', async () => {

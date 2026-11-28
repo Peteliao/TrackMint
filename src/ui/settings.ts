@@ -26,6 +26,9 @@ import { createSyncPanel } from './syncPanel';
 import { eraseSyncState } from '../core/syncStore';
 import { openInstallGuide, installSettingsInfo } from './install';
 import { refreshWeather, weatherState } from '../core/weatherService';
+import { defaultSafetySettings, saveSafetySettings, SAFETY_STORAGE_KEY } from '../core/safety';
+import { resetLastGasp } from '../core/safetyMonitor';
+import { createSafetySettingsCard } from './safetySettings';
 import { el, icon, toast, confirmModal, filePicker, modal } from './helpers';
 
 export function createSettingsView(navigate) {
@@ -170,6 +173,7 @@ export function createSettingsView(navigate) {
   const privacyCard = panel(
     numRow(t('settings.privacyRadius'), t('settings.privacyRadiusHint'), 'privacyRadius', { min: 0, max: 5000, step: 50, unit: 'm' })
   );
+  const safetyCard = createSafetySettingsCard();
 
   // ---- weather ----
   let weatherMode = get('weatherProviderMode') || 'auto';
@@ -735,6 +739,12 @@ export function createSettingsView(navigate) {
     if (!again) return;
     await eraseAll();
     try { await eraseSyncState(); } catch (error) { console.warn('sync state clear failed', error); }
+    try {
+      localStorage.removeItem(SAFETY_STORAGE_KEY);
+      localStorage.removeItem('localtrace.safety.last-gasp.v1');
+      saveSafetySettings(defaultSafetySettings());
+    } catch { /* safety settings unavailable */ }
+    safetyCard.refresh();
     await setActiveTrip(null);
     toast(t('settings.cleared'), 'ok');
     refreshStorage();
@@ -749,6 +759,8 @@ export function createSettingsView(navigate) {
     if (!ok) return;
     meet.stopP2P();
     resetSettings();
+    saveSafetySettings(defaultSafetySettings());
+    resetLastGasp();
     toast(t('settings.resetDone'), 'ok', 1600);
     setTimeout(() => location.reload(), 450);
   };
@@ -789,6 +801,7 @@ export function createSettingsView(navigate) {
     el('div', { class: 'sep' }),
     backupHealthLine,
     el('div', { class: 'row wrap', style: { marginTop: '8px' } }, backupBtn, restoreBtn, drillBtn),
+    el('div', { class: 'small faint', style: { margin: '6px 0 0' }, 'data-safety-backup-note': '' }, t('safety.backupExcluded')),
     el('div', { class: 'small faint', style: { margin: '6px 0 0' } }, t('settings.drillDesc')),
     el('div', { class: 'row wrap', style: { marginTop: '4px', alignItems: 'center' } }, drillLine, drillCancelBtn),
     el('div', { class: 'row wrap settings-subhead', style: { marginTop: '14px' } }, icon('database', 15), t('settings.historyTitle'), historyClearBtn),
@@ -1006,7 +1019,7 @@ export function createSettingsView(navigate) {
     el('div', { class: 'page-head' }, el('h2', { class: 'page-title' }, t('settings.title'))),
     section(t('settings.appearanceGroup')), langCard,
     section(t('settings.recordGroup')), recCard,
-    section(t('settings.privacyGroup')), privacyCard,
+    section(t('settings.privacyGroup')), privacyCard, safetyCard.card,
     section(t('settings.weatherGroup')), weatherCard,
     section(t('settings.mapGroup')), regionCard, mapAdvanced.details,
     section(t('settings.syncGroup')), syncPanel.card,
@@ -1016,13 +1029,22 @@ export function createSettingsView(navigate) {
 
   return {
     view,
-    refresh: () => { renderProbe(); renderSimBanner(); refreshStorage(); syncPanel.refresh(); renderWeatherStatus(); },
+    refresh: () => { renderProbe(); renderSimBanner(); refreshStorage(); syncPanel.refresh(); renderWeatherStatus(); safetyCard.refresh(); },
     destroy: () => { syncPanel.destroy(); healthController?.abort(); stopWeatherStatus(); stopWeatherSettings(); },
     resize: () => {},
     focus: (intent) => {
       const anchor = typeof intent === 'string' ? intent : intent?.anchor;
-      if (anchor !== 'relay' && anchor !== 'database' && anchor !== 'weather') return;
+      if (anchor !== 'relay' && anchor !== 'database' && anchor !== 'weather' && anchor !== 'safety') return;
       requestAnimationFrame(() => {
+        if (anchor === 'safety') {
+          safetyCard.open();
+          safetyCard.card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          safetyCard.card.classList.remove('settings-focus');
+          void safetyCard.card.offsetWidth;
+          safetyCard.card.classList.add('settings-focus');
+          setTimeout(() => safetyCard.card.classList.remove('settings-focus'), 2000);
+          return;
+        }
         if (anchor === 'weather') {
           weatherCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
           weatherCard.classList.remove('settings-focus');

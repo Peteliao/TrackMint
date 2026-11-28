@@ -2,6 +2,24 @@ import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 import { blockExternal, gotoTab, gotoTripSection, openDemo } from './utils';
 
+async function expectCompactPromoActions(page: import('@playwright/test').Page, count: number) {
+  const actions = page.locator('.promo-actions');
+  await expect(actions.locator('button')).toHaveCount(count);
+  const layout = await actions.evaluate((node) => {
+    const boxes = [...node.querySelectorAll('button')].map((button) => {
+      const rect = button.getBoundingClientRect();
+      return { top: rect.top, height: rect.height };
+    });
+    return {
+      columns: getComputedStyle(node).gridTemplateColumns.split(' ').length,
+      boxes
+    };
+  });
+  expect(layout.columns).toBe(count);
+  expect(new Set(layout.boxes.map((box) => Math.round(box.top))).size).toBe(1);
+  expect(layout.boxes.every((box) => box.height >= 46 && box.height <= 55)).toBe(true);
+}
+
 test('RoamEtch record view starts directly without manual creation', async ({ page }) => {
   await blockExternal(page);
   await page.goto('/');
@@ -108,6 +126,10 @@ test('promo preview lists 25 designs, advances and switches audiences', async ({
     if (message.type() === 'error' && !message.text().includes('Failed to load resource')) errors.push(message.text());
   });
   page.on('pageerror', (error) => errors.push(error.message));
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'share', { configurable: true, value: undefined });
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: undefined });
+  });
   await blockExternal(page);
   await page.goto('/');
   await gotoTab(page, 'settings');
@@ -115,6 +137,8 @@ test('promo preview lists 25 designs, advances and switches audiences', async ({
   const preview = page.locator('.promo-preview-img');
   const select = page.locator('.promo-variant-select');
   await expect(preview).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('.promo-actions')).toHaveClass(/three/);
+  await expectCompactPromoActions(page, 3);
   await expect(select.locator('option')).toHaveCount(25);
   const first = Number(await preview.getAttribute('data-variant'));
   await page.getByRole('button', { name: '换一张', exact: true }).click();
@@ -127,6 +151,17 @@ test('promo preview lists 25 designs, advances and switches audiences', async ({
   expect(await preview.getAttribute('src')).not.toBe(previousSrc);
   const overflow = await page.locator('.modal-backdrop .modal').evaluate((node) => node.scrollWidth - node.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.promo-modal')).toHaveCount(0);
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'share', { configurable: true, value: async () => undefined });
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true });
+  });
+  await page.getByRole('button', { name: '生成宣传图', exact: true }).click();
+  await expect(preview).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('.promo-actions')).not.toHaveClass(/three/);
+  await expectCompactPromoActions(page, 4);
   expect(errors).toEqual([]);
 });
 
