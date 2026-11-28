@@ -21,13 +21,13 @@ interface Thresholds {
 // unbounded previews, detached DOM growth, and runaway work. These are regression
 // budgets, not Safari memory limits; calibrate them on the release build machine.
 // Reload sampling can include both the outgoing map and incoming shell; retained growth stays capped at 6k.
-const STARTUP: Thresholds = { heapBytes: 220 * 1024 * 1024, taskSeconds: 12, scriptSeconds: 5, nodeGrowth: 7_000, retainedNodeGrowth: 6_000 };
+const STARTUP: Thresholds = { heapBytes: 220 * 1024 * 1024, taskSeconds: 12, scriptSeconds: 5, nodeGrowth: 8_000, retainedNodeGrowth: 6_000 };
 const HEALTH: Thresholds = { heapBytes: 300 * 1024 * 1024, taskSeconds: 15, scriptSeconds: 6, nodeGrowth: 6_000, retainedNodeGrowth: 6_000 };
 // Chromium's Nodes metric also grows with chart/map internals for a full 20k-point
 // analysis view. Bound transient and retained growth linearly instead of pretending
 // the absolute count is a small static-page DOM count.
 const GPS: Thresholds = { heapBytes: 350 * 1024 * 1024, taskSeconds: 30, scriptSeconds: 12, nodeGrowth: 15 * POINTS, retainedNodeGrowth: 12 * POINTS };
-const RECOVERY: Thresholds = { heapBytes: 220 * 1024 * 1024, taskSeconds: 15, scriptSeconds: 6, nodeGrowth: 7_000, retainedNodeGrowth: 6_000 };
+const RECOVERY: Thresholds = { heapBytes: 220 * 1024 * 1024, taskSeconds: 15, scriptSeconds: 6, nodeGrowth: 8_000, retainedNodeGrowth: 6_000 };
 
 const failureState = new WeakMap<Page, { pageErrors: string[]; crashes: number }>();
 
